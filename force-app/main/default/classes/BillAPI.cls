@@ -1,5 +1,5 @@
 public with sharing class BillAPI {
-    public static void getBills() {
+    public static HttpResponse getBillsHttpCallout() {
         /* 
         Start by creating an HttpRequest object and set the endpoint and method.
         Endpoint: https://my-json-server.typicode.com/grizzleevelyn/231017_dev_clicked/db
@@ -14,30 +14,16 @@ public with sharing class BillAPI {
         request.setMethod('GET');
         HttpResponse response = http.send(request);
         String jsonResponse = response.getBody();
+        
 
         // Deserialize the JSON response into a list of BillWrapper objects.
-        // Learn more about JSON.deserialize: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_class_System_Json.htm#apex_System_Json_deserialize
+          // Create a list to hold the bills we will insert into Salesforce.
+          
         if(response.getStatusCode() == 200) {
-        List<BillWrapper> bwList = (List<BillWrapper>) JSON.deserialize(jsonResponse, List<BillWrapper>.class);
+       
+            List<String> accNames = new List<String>();
+            List<BillWrapper> bwList = (List<BillWrapper>) JSON.deserialize(jsonResponse, List<BillWrapper>.class);
         
-        // debug Output the deserialized data
-        for (BillWrapper bill : bwList) {
-                System.debug('Bill ID: ' + bill.billId);
-                System.debug('Account Name: ' + bill.accountName);
-                System.debug('Balance: ' + bill.balance);
-}
-
-
-        // Create a list to hold the bills we will insert into Salesforce.
-        List<String> accNames = new List<String>();
-
-        for (BillWrapper bill : bwList) {
-            
-            accNames.add(bill.accountName);
-            
-        }
-    }
-
         // Query for accounts that match the account name from the bill wrapper list.
          // Query for active accounts (Active__c = 'Yes').
         
@@ -54,35 +40,47 @@ public with sharing class BillAPI {
         // Create a list to hold the bills we will insert into Salesforce.
         List<Bill__c> billsToInsert = new List<Bill__c>();
 
-
         /*
         Iterate over the list of BillWrapper objects and create a new Bill__c record for each.
         Match the new bill fields with the properties of the BillWrapper class.
         For example, for Bill__c.Balance__c, use Decimal.valueOf(bw.balance.replace('$', '')) to convert the balance to a decimal.
-        Remember, DML (Data Manipulation Language) operations should not be inside loops. Learn more about DML: https://developer.salesforce.com/docs/atlas.en-us.apexcode.meta/apexcode/apex_dml_section.htm
         */
         // Iterate through the BillWrapper list and create Bill__c objects for each active account.
-for (BillWrapper bill : bwList) {
-    // Check if the account name exists in the accMap (i.e., it's an active account).
-    if (accMap.containsKey(bill.accountName)) {
-        // Create a new Bill__c object.
-        Bill__c newBill = new Bill__c();
-        
-        // Set the fields of the Bill__c object.
-        newBill.Account__c = accMap.get(bill.accountName); // Set the Account lookup field.
-        newBill.Balance__c = Decimal.valueOf(bill.balance.replace('$','')); // Convert the balance string to a decimal.
-        newBill.Invoice_Number__c = bill.billId; // Assuming BillId__c is a custom field on Bill__c.
+        for (BillWrapper bill : bwList) {
+            // Check if the account name exists in the accMap (i.e., it's an active account).
+            if (accMap.containsKey(bill.accountName)) {
+                // Create a new Bill__c object.
+                Bill__c newBill = new Bill__c();
+                
+                // Set the fields of the Bill__c object.
+                newBill.Account__c = accMap.get(bill.accountName); // Set the Account lookup field.
+                newBill.Balance__c = Decimal.valueOf(bill.balance.replace('$','')); // Convert the balance string to a decimal.
+                newBill.Invoice_Number__c = bill.billId; // Assuming BillId__c is a custom field on Bill__c.
 
-        // Add the Bill__c object to the billsToInsert list.
-        billsToInsert.add(newBill);
-    }
-}
+                // Add the Bill__c object to the billsToInsert list.
+                billsToInsert.add(newBill);
+            }
+        }
 
 
         //finally, insert the new bills list
-        billsToInsert.add(newBill);
+        if (!billsToInsert.isEmpty()) {
+            insert billsToInsert;
+        }
+        else{
+            System.debug('There are no bills to insert.');
+        }
+        return response; 
+   
+        
     }
-
+    else {
+        
+        System.debug('Response Status code is not 200. Error: ' + response.getStatusCode() + ' ' + response.getStatus());
+    }
+    return response;
+    }
+    
     /*  
     This is a wrapper class. A wrapper class allows us to create an instance of a class with the properties we specify.
     In this case, we are creating a class that will hold the properties for BillId, AccountName, and Balance.
