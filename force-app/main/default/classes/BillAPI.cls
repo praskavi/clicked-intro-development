@@ -1,5 +1,6 @@
 public with sharing class BillAPI {
-    public static HttpResponse getBillsHttpCallout() {
+    @future(callout=true)
+    public static void getBillsHttpCallout() {
         /* 
         Start by creating an HttpRequest object and set the endpoint and method.
         Endpoint: https://my-json-server.typicode.com/grizzleevelyn/231017_dev_clicked/db
@@ -14,9 +15,9 @@ public with sharing class BillAPI {
         request.setMethod('GET');
         HttpResponse response = http.send(request);
         String jsonResponse = response.getBody();
-        
-
-        // Deserialize the JSON response into a list of BillWrapper objects.
+        try {
+            
+         // Deserialize the JSON response into a list of BillWrapper objects.
           // Create a list to hold the bills we will insert into Salesforce.
           
         if(response.getStatusCode() == 200) {
@@ -70,17 +71,21 @@ public with sharing class BillAPI {
         else{
             System.debug('There are no bills to insert.');
         }
-        return response; 
+        
    
         
     }
+    
     else {
         
         System.debug('Response Status code is not 200. Error: ' + response.getStatusCode() + ' ' + response.getStatus());
     }
-    return response;
-    }
     
+    }
+    catch(Exception e){
+        System.debug('Exception: ' + e.getMessage());
+    }
+}
     /*  
     This is a wrapper class. A wrapper class allows us to create an instance of a class with the properties we specify.
     In this case, we are creating a class that will hold the properties for BillId, AccountName, and Balance.
