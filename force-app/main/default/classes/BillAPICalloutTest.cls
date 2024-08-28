@@ -2,6 +2,11 @@
 public with sharing class BillAPICalloutTest {
     @isTest
     public static void getBillCallout() {
+        // Create test accounts that match the names in the mock response
+        Account acc1 = new Account(Name = 'Account A', Active__c = 'Yes');
+        Account acc2 = new Account(Name = 'Account B', Active__c = 'Yes');
+        insert new List<Account>{ acc1, acc2 };
+
         Test.setMock(HttpCalloutMock.class,new MockHttpResponseGenerator());
         // Call method to test.
         // This causes a fake response to be sent
@@ -9,7 +14,7 @@ public with sharing class BillAPICalloutTest {
 
         // call the future method
         Test.startTest() ;
-        BillAPI.getBillsHttpCallout();
+        BillAPI.getBills();
         Test.stopTest();
         // Verify that a fake response is sent
         // from the class that implements HttpCalloutMock.

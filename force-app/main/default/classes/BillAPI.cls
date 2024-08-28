@@ -1,6 +1,31 @@
 public with sharing class BillAPI {
-    @future(callout=true)
-    public static void getBillsHttpCallout() {
+    //@future(callout=true)
+    public static void getBills() {
+        try{
+            // Perform the callout to get bills
+            List<Account> activeAccounts = getBillsCallout();
+            if (activeAccounts != null && !activeAccounts.isEmpty()) {
+                List<Bill__c> billsToInsert = buildBillRecords(activeAccounts);
+                 //finally, insert the new bills list
+                if (!billsToInsert.isEmpty()) {
+                 insert billsToInsert;
+        }
+                 else{
+                        System.debug('There are no bills to insert.');
+                    }
+            }
+            else {
+                System.debug('There are no acctive accounts.');
+            }
+        
+        }
+    
+    catch(Exception e){
+        System.debug('Exception: ' + e.getMessage());
+    }
+        }
+
+    
         /* 
         Start by creating an HttpRequest object and set the endpoint and method.
         Endpoint: https://my-json-server.typicode.com/grizzleevelyn/231017_dev_clicked/db
@@ -9,6 +34,8 @@ public with sharing class BillAPI {
         */
 
         // Set up an Http object and an HTTPResponse object, then use the .getBody() method to get the response body.
+        // Method to perform the HTTP callout and retrieve active accounts
+       Private static List<Account> getBillsCallout(){
         Http http = new Http();
         HttpRequest request = new HttpRequest();
         request.setEndpoint('https://my-json-server.typicode.com/walters954/clicked-intro-development-server/bills');
@@ -24,15 +51,34 @@ public with sharing class BillAPI {
        
             List<String> accNames = new List<String>();
             List<BillWrapper> bwList = (List<BillWrapper>) JSON.deserialize(jsonResponse, List<BillWrapper>.class);
+            System.debug('BillWrapper List: ' + bwList);
         
+            // Collect account names from the response
+            for (BillWrapper bill : bwList) {
+                accNames.add(bill.accountName);
+            }
+            // Debug the account names collected
+            System.debug('Account Names from BillWrapper: ' + accNames);
         // Query for accounts that match the account name from the bill wrapper list.
          // Query for active accounts (Active__c = 'Yes').
         
         List<Account> accList = [SELECT Id, Name FROM Account WHERE Name IN :accNames AND Active__c = 'Yes' WITH SECURITY_ENFORCED];
+        return accList;
+        }
+        else {
         
+            System.debug('Response Status code is not 200. Error: ' + response.getStatusCode() + ' ' + response.getStatus());
+        }
+    }
+        
+        catch(Exception e){
+            System.debug('Exception: ' + e.getMessage());
+        }
+        return null;
+    }
         // Create a map to hold active account names and their IDs.
         // Iterate over the list of active accounts and add their name and ID to the map.
-
+        Private Static List<Bill__c>  billsToInsertMethod(List<Account> accList){
         Map<String, String> accMap = new Map<String, String>();
         for (Account acc : accList) {
             accMap.put(acc.Name, acc.Id);
@@ -62,30 +108,9 @@ public with sharing class BillAPI {
                 billsToInsert.add(newBill);
             }
         }
-
-
-        //finally, insert the new bills list
-        if (!billsToInsert.isEmpty()) {
-            insert billsToInsert;
-        }
-        else{
-            System.debug('There are no bills to insert.');
-        }
-        
-   
-        
+        return billsToInsert;
     }
-    
-    else {
-        
-        System.debug('Response Status code is not 200. Error: ' + response.getStatusCode() + ' ' + response.getStatus());
-    }
-    
-    }
-    catch(Exception e){
-        System.debug('Exception: ' + e.getMessage());
-    }
-}
+       
     /*  
     This is a wrapper class. A wrapper class allows us to create an instance of a class with the properties we specify.
     In this case, we are creating a class that will hold the properties for BillId, AccountName, and Balance.
@@ -99,4 +124,5 @@ public with sharing class BillAPI {
         public String accountName;
         public String balance;
     }
-}
+
+        }
