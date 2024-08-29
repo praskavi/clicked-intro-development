@@ -12,7 +12,7 @@ public with sharing class BillBatchTest {
         }
     }
    @isTest
-    public static void billBatchTest() {
+    public static void billBatchTestAccounts() {
         List<Account> acc = new List<Account>();
         for(Integer i = 0; i < 5; i++){
             Account ac = new Account();
