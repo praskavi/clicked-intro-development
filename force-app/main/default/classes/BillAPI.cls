@@ -3,21 +3,18 @@ public with sharing class BillAPI {
     public static void getBills() {
         try{
             // Perform the callout to get bills
-            List<Account> activeAccounts = getBillsCallout();
-            if (activeAccounts != null && !activeAccounts.isEmpty()) {
-                List<Bill__c> billsToInsert = buildBillRecords(activeAccounts);
-                 //finally, insert the new bills list
-                if (!billsToInsert.isEmpty()) {
-                 insert billsToInsert;
-        }
-                 else{
-                        System.debug('There are no bills to insert.');
-                    }
+            List<Bill__C> insertBills = getBillsCallout();
+            
+            // Check if the callout is successful, if not return an error
+            if (insertBills.size() == 0) {
+                System.debug('Callout unsuccessful.');
             }
+            // If successful insert all bills into the database
             else {
-                System.debug('There are no acctive accounts.');
+                insert insertBills;
             }
-        
+            
+                    
         }
     
     catch(Exception e){
@@ -35,7 +32,7 @@ public with sharing class BillAPI {
 
         // Set up an Http object and an HTTPResponse object, then use the .getBody() method to get the response body.
         // Method to perform the HTTP callout and retrieve active accounts
-       Private static List<Account> getBillsCallout(){
+       private static List<Bill__c> getBillsCallout(){
         Http http = new Http();
         HttpRequest request = new HttpRequest();
         request.setEndpoint('https://my-json-server.typicode.com/walters954/clicked-intro-development-server/bills');
@@ -63,8 +60,18 @@ public with sharing class BillAPI {
          // Query for active accounts (Active__c = 'Yes').
         
         List<Account> accList = [SELECT Id, Name FROM Account WHERE Name IN :accNames AND Active__c = 'Yes' WITH SECURITY_ENFORCED];
-        return accList;
+        if (accList != null && !accList.isEmpty()) {
+            List<Bill__c> bills = billsToInsertMethod(accList,bwList);
+            return bills;
+             
+    }
+             
+        
+        else {
+            System.debug('There are no acctive accounts.');
         }
+    }
+        
         else {
         
             System.debug('Response Status code is not 200. Error: ' + response.getStatusCode() + ' ' + response.getStatus());
@@ -78,7 +85,7 @@ public with sharing class BillAPI {
     }
         // Create a map to hold active account names and their IDs.
         // Iterate over the list of active accounts and add their name and ID to the map.
-        Private Static List<Bill__c>  billsToInsertMethod(List<Account> accList){
+        private Static List<Bill__c>  billsToInsertMethod(List<Account> accList, List<BillWrapper> bwList){
         Map<String, String> accMap = new Map<String, String>();
         for (Account acc : accList) {
             accMap.put(acc.Name, acc.Id);

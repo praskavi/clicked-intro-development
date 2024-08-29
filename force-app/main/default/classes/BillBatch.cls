@@ -72,7 +72,10 @@ public with sharing class BillBatch implements Database.Batchable<sObject>, Data
                 //.put(Id, Id) method
                 billMap.put(account.Id, account.Bills__r.get(0).Id);
                 //add the account Id to the emailMap, using the .put(Id, String) method
-                emailMap.put(account.Id, account.Bill_By_Email__c);
+                emailMap.put(account.Id, account.Email__c);
+                System.debug('Account: ' + account);
+                System.debug('Bill Id: ' + account.Bills__r.get(0).Id);
+                System.debug('Account Id: ' + account.Id);
             }
         }
 
@@ -111,5 +114,7 @@ public with sharing class BillBatch implements Database.Batchable<sObject>, Data
         
         // Send the emails
         BillEmailer.sendEmails(sendMap);
+        // Logging the size of the sendMap for debugging
+    System.debug('Number of emails sent: ' + sendMap.keySet().size());
     }
 }
