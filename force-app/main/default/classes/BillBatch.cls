@@ -1,5 +1,7 @@
 public with sharing class BillBatch implements Database.Batchable<sObject>, Database.AllowsCallouts, Database.Stateful {
     public List<Id> receivesBillByEmail = new List<Id>();
+ 
+   
 
     public Database.QueryLocator start(Database.BatchableContext bc) {
         //this is a method that will query for all accounts that are active and have a value
@@ -46,7 +48,7 @@ public with sharing class BillBatch implements Database.Batchable<sObject>, Data
         //[SELECT Id, (SELECT Id FROM Bills__r ORDER BY CreatedDate DESC) FROM Account WHERE Id IN :this.receivesBillByEmail]
         // Query for recently created bills for each account in receivesBillByEmail
         List<Account> accountsWithBills = [
-            SELECT Id, (SELECT Id FROM Bills__r ORDER BY CreatedDate DESC) 
+            SELECT Id, Email__c,(SELECT Id FROM Bills__r ORDER BY CreatedDate DESC) 
             FROM Account 
             WHERE Id IN :this.receivesBillByEmail
         ];
@@ -104,8 +106,8 @@ public with sharing class BillBatch implements Database.Batchable<sObject>, Data
              // Generate the PDF for the bill
             PageReference pageRef = new PageReference('/apex/BillVFP?id=' + billId);
             Blob pdfBlob = pageRef.getContentAsPDF();  
+
             
-            // Add the email address to the emailMapWithBlob map, using the .put(String, Blob) method
             sendMap.put(emailAddress, pdfBlob);
         }
 
