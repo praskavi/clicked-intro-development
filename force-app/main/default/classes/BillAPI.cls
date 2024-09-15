@@ -11,11 +11,10 @@ public with sharing class BillAPI {
             }
             // If successful insert all bills into the database
             else {
-                insert insertBills;
+                upsert insertBills Invoice_Number__c;
             }
             
-                    
-        }
+              }
     
     catch(Exception e){
         System.debug('Exception: ' + e.getMessage());
@@ -57,15 +56,16 @@ public with sharing class BillAPI {
             // Debug the account names collected
             System.debug('Account Names from BillWrapper: ' + accNames);
         // Query for accounts that match the account name from the bill wrapper list.
-         // Query for active accounts (Active__c = 'Yes').
+         //for active accounts (Active__c = 'Yes') and there related bills.
         
-        List<Account> accList = [SELECT Id, Name FROM Account WHERE Name IN :accNames AND Active__c = 'Yes' WITH SECURITY_ENFORCED];
+        List<Account> accList = [SELECT Id, Name,(SELECT Id from Bills__r) FROM Account WHERE Name IN :accNames AND Active__c = 'Yes' WITH SECURITY_ENFORCED];
         if (accList != null && !accList.isEmpty()) {
+            
             List<Bill__c> bills = billsToInsertMethod(accList,bwList);
             return bills;
              
     }
-             
+            
         
         else {
             System.debug('There are no acctive accounts.');
@@ -83,6 +83,7 @@ public with sharing class BillAPI {
         }
         return null;
     }
+    
         // Create a map to hold active account names and their IDs.
         // Iterate over the list of active accounts and add their name and ID to the map.
         private Static List<Bill__c>  billsToInsertMethod(List<Account> accList, List<BillWrapper> bwList){
@@ -115,7 +116,8 @@ public with sharing class BillAPI {
                 billsToInsert.add(newBill);
             }
         }
-        return billsToInsert;
+            System.debug('Number of Bills to Insert: ' + billsToInsert.size());
+        return billsToInsert  ;
     }
        
     /*  

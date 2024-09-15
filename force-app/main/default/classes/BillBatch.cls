@@ -1,122 +1,167 @@
-public with sharing class BillBatch implements Database.Batchable<sObject>, Database.AllowsCallouts, Database.Stateful {
-    public List<Id> receivesBillByEmail = new List<Id>();
- 
-   
-
-    public Database.QueryLocator start(Database.BatchableContext bc) {
-        //this is a method that will query for all accounts that are active and have a value
-        //for Bill_By_Email__c (Account.Active__c = \'Yes\' AND Bill_By_Email != null)
-        //using the Database.getQueryLocator(String) method. Return the result of this method.
-        //Hint: be sure to escape the single quotes surrounding \'Yes\' in your dynamic query!
-        //query for the following fields:
-        //Id, Bill_By_Email__c
-       // return null;
-       return Database.getQueryLocator(
-            'SELECT Id, Bill_By_Email__c FROM Account WHERE Active__c = \'Yes\''+
-            'AND Bill_By_Email__c !=NULL'
-         
-        );
-    }
-
-    public void execute(Database.BatchableContext bc, List<Account> scope) {
-        //this is a method that will process the queried for records by preparing
-        //a list of account Ids (this.receivesBillByEmail) to carry over to the finish method.
-        //we will do this by iterating over scope and checking whether Bill_By_Email__c == TRUE.
-        //This method will also call our BillAPI.getBills() method.
-        
-        //for all accounts in scope, add the account id to the receivesBillByEmail list
-        for(Account account : scope){
-            if(account.Bill_By_Email__c == TRUE){ 
-                //if the Bill_By_Email__c is TRUE, add the account to the receivesBillByEmail list
-                receivesBillByEmail.add(account.Id);
+public with sharing class BillAPI {
+    //@future(callout=true)
+    public static void getBills() {
+        try{
+            // Perform the callout to get bills
+            List<Bill__C> insertBills = getBillsCallout();
+            
+            // Check if the callout is successful, if not return an error
+            if (insertBills.size() == 0) {
+                System.debug('Callout unsuccessful.');
             }
-        }
-            	//this is a method that will use the BillAPI.getBills() method to execute the callout
-        if(!receivesBillByEmail.isEmpty()){
-            //getBills();
-            BillAPI.getBills();
-        }
-        System.debug('Number of accounts to receive bill emails: ' + receivesBillByEmail.size());
-        //this is a method that we have defined in the BillAPI class. The method is called getBills().
-    }
-
-    public void finish(Database.BatchableContext bc) {
-        //this is the final method of the class, that will be called after all processing in the
-        //start and execute methods is complete. We will use this method to send an email to each
-        //customer in the receivesBillByEmail list. First, we must query for the recently created bills for
-        //each account with the following nested query:
-        //[SELECT Id, (SELECT Id FROM Bills__r ORDER BY CreatedDate DESC) FROM Account WHERE Id IN :this.receivesBillByEmail]
-        // Query for recently created bills for each account in receivesBillByEmail
-        List<Account> accountsWithBills = [
-            SELECT Id, Email__c,(SELECT Id FROM Bills__r ORDER BY CreatedDate DESC) 
-            FROM Account 
-            WHERE Id IN :this.receivesBillByEmail
-        ];
-         
-
-        //We will then iterate over the results of this query and associate the Id of the most recent bill (value) with the
-        //corresponding Id of the account Id (key) in a Map<Id, Id> that we will call billMap, using the .put(Id, Id)
-        //method of the Map class:
-        //https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_methods_system_map.htm
-        //we will also create a Map<Id, String> called emailMap, where we'll hold the Account Id (key) and account email (value).
-        
-         // Create a map to hold the most recent bill Id associated with each account
-        Map<Id, Id> billMap = new Map<Id, Id>();
-        // Create a map to hold the account Id and email
-        Map<Id, String> emailMap = new Map<Id, String>();
-        
-        //Iterate over the accountsWithBills list, and use the .get(0) method to get the first value in the Bills__r list
-        //for each account
-        for(Account account : accountsWithBills){
-            //Check if the bills__r list has values
-            if(!account.Bills__r.isEmpty()){
-                //if there is a value in the bills__r list, add the most recent bill Id to the billMap, using the
-                //.put(Id, Id) method
-                billMap.put(account.Id, account.Bills__r.get(0).Id);
-                //add the account Id to the emailMap, using the .put(Id, String) method
-                emailMap.put(account.Id, account.Email__c);
-                System.debug('Account: ' + account);
-                System.debug('Bill Id: ' + account.Bills__r.get(0).Id);
-                System.debug('Account Id: ' + account.Id);
+            // If successful insert all bills into the database
+            else {
+                upsert insertBills;
             }
+            
+                    
         }
-
-        //Next, we are going to prepare to call our BillEmailer.sendEmails(Map<String, Blob> emailsWithBills)
-        //method. The String in the map, which we'll call sendMap,will be the Account.Email__c field result, and the Blob
-        //will be the PDF attachment we are sending. We will achieve this by iterating over the keyset for
-        //billMap, putting the email from the account in the key of the key-value pair, and use the following
-        //to generate a PDF for each bill Id in the value of the key-value pair:
-        //PageReference pageRef = new PageReference('/apex/BillVFP?id=' + [BILLID]);
-        //Blob pdfBlob = pageRef.getContentAsPDF();
-        //hint: you'll need to use the .get() method of the Map class a couple of times here.
-        
-        // Create a map to hold the email address and the blob of the email
-        Map<String, Blob> sendMap = new Map<String, Blob>();
-        
-        // Iterate over the values for the billMap, which contains the billIds for each account
-        for(Id accountId : billMap.keySet()){
-            
-            //use the .get(Id accountId) method to return the value for a given key
-
-            Id billId = billMap.get(AccountId);
-            
-            // Use the .get(Id accountId) method to return the value for a given key
-            String emailAddress = emailMap.get(AccountId);
-            
-             // Generate the PDF for the bill
-            PageReference pageRef = new PageReference('/apex/BillVFP?id=' + billId);
-            Blob pdfBlob = pageRef.getContentAsPDF();  
-
-            
-            sendMap.put(emailAddress, pdfBlob);
-        }
-
-        //finally, we will call our BillEmailer.sendEmails(sendMap) method. Remember, this method is VOID,
-        //so there will be no return value;
-        
-        // Send the emails
-        BillEmailer.sendEmails(sendMap);
-        // Logging the size of the sendMap for debugging
-    System.debug('Number of emails sent: ' + sendMap.keySet().size());
+    
+    catch(Exception e){
+        System.debug('Exception: ' + e.getMessage());
     }
+        }
+
+    
+        /* 
+        Start by creating an HttpRequest object and set the endpoint and method.
+        Endpoint: https://my-json-server.typicode.com/grizzleevelyn/231017_dev_clicked/db
+        Method: GET
+        Learn more about HTTPRequest: https://developer.salesforce.com/docs/atlas.en-us.apexref.meta/apexref/apex_classes_restful_http_httprequest.htm
+        */
+
+        // Set up an Http object and an HTTPResponse object, then use the .getBody() method to get the response body.
+        // Method to perform the HTTP callout and retrieve active accounts
+       private static List<Bill__c> getBillsCallout(){
+        Http http = new Http();
+        HttpRequest request = new HttpRequest();
+        request.setEndpoint('https://my-json-server.typicode.com/walters954/clicked-intro-development-server/bills');
+        request.setMethod('GET');
+        HttpResponse response = http.send(request);
+        String jsonResponse = response.getBody();
+        try {
+            
+         // Deserialize the JSON response into a list of BillWrapper objects.
+          // Create a list to hold the bills we will insert into Salesforce.
+          
+        if(response.getStatusCode() == 200) {
+       
+            List<String> uniqueAccNames = new List<String>();
+            List<BillWrapper> bwList = (List<BillWrapper>) JSON.deserialize(jsonResponse, List<BillWrapper>.class);
+            System.debug('BillWrapper List: ' + bwList);
+        
+            // Collect account names and bills from the response
+            // Create a map to store accountName as the key and a list of billIds as the value
+Map<String, List<String>> accountBillMap = new Map<String, List<String>>();
+
+// Loop through the list of BillWrapper objects
+for (BillWrapper bw : bwList) {
+    // Check if the account already exists in the map
+    if (!accountBillMap.containsKey(bw.accountName)) {
+        // If not, create a new list for the bills of this account
+        accountBillMap.put(bw.accountName, new List<String>());
+    }
+    
+    // Add the billId to the account's bill list
+    accountBillMap.get(bw.accountName).add(bw.billId);
 }
+
+
+            // Debug the account names collected
+            System.debug('Account Names from BillWrapper: ' + UniqueAccNames);
+            // Now accountBillMap contains accountName as the key and corresponding billIds as the value
+System.debug('Account-Bill Map: ' + accountBillMap);
+
+       
+
+        // Query for accounts that match the account name from the bill wrapper list.
+         //for active accounts (Active__c = 'Yes') and there related bills.
+        
+        List<Account> accList = [SELECT Id, Name,(SELECT Id from Bills__r) FROM Account WHERE Name IN :accountBillMap.keySet() AND Active__c = 'Yes' WITH SECURITY_ENFORCED];
+        if (accList != null && !accList.isEmpty()) {
+            // create a map of account and its related bills
+            
+            
+            // for (string accname : accountBillMap.keySet()) {{
+            //     System.debug('Account Name: ' + accname);
+            
+            //     System.debug(' - Bill ID: ' + accname.values());
+            //     }
+            
+            
+            List<Bill__c> bills = billsToInsertMethod(accList,accountBillMap);
+            return bills;
+             
+    }
+            
+        
+        else {
+            System.debug('There are no acctive accounts.');
+        }
+    }
+        
+        else {
+        
+            System.debug('Response Status code is not 200. Error: ' + response.getStatusCode() + ' ' + response.getStatus());
+        }
+    }
+        
+        catch(Exception e){
+            System.debug('Exception: ' + e.getMessage());
+        }
+        return null;
+    }
+    
+   
+    
+        // Create a map to hold active account names and their IDs.
+        // Iterate over the list of active accounts and add their name and ID to the map.
+        private Static List<Bill__c>  billsToInsertMethod(List<Account> accList, Map<String, List<String>> accountBillMap){
+        Map<String, String> accMap = new Map<String, String>();
+        for (Account acc : accList) {
+            accMap.put(acc.Name, acc.Id);
+        }
+
+        // Create a list to hold the bills we will insert into Salesforce.
+        List<Bill__c> billsToInsert = new List<Bill__c>();
+
+        /*
+        Iterate over the list of BillWrapper objects and create a new Bill__c record for each.
+        Match the new bill fields with the properties of the BillWrapper class.
+        For example, for Bill__c.Balance__c, use Decimal.valueOf(bw.balance.replace('$', '')) to convert the balance to a decimal.
+        */
+        // Iterate through the BillWrapper list and create Bill__c objects for each active account.
+        for (BillWrapper bill : bwList) {
+            // Check if the account name exists in the accMap (i.e., it's an active account).
+            if (accMap.containsKey(bill.accountName)) {
+                // Create a new Bill__c object.
+                Bill__c newBill = new Bill__c();
+                
+                // Set the fields of the Bill__c object.
+                newBill.Account__c = accMap.get(bill.accountName); // Set the Account lookup field.
+                newBill.Balance__c = Decimal.valueOf(bill.balance.replace('$','')); // Convert the balance string to a decimal.
+                newBill.Invoice_Number__c = bill.billId; // Assuming BillId__c is a custom field on Bill__c.
+
+                // Add the Bill__c object to the billsToInsert list.
+                billsToInsert.add(newBill);
+            }
+        }
+            System.debug('Number of Bills to Insert: ' + billsToInsert.size());
+        return billsToInsert;
+    }
+       
+    /*  
+    This is a wrapper class. A wrapper class allows us to create an instance of a class with the properties we specify.
+    In this case, we are creating a class that will hold the properties for BillId, AccountName, and Balance.
+    These properties will be populated from the JSON structure stored in our external data source.
+    Once we get the body of our HTTP callout, we will use the following line of code to transform the response body into a list of instances of our wrapper class, BillWrapper:
+    List<BillWrapper> bwList = (List<BillWrapper>)JSON.deserialize(responseBody, List<BillWrapper>.class);
+    Once we have a list of BillWrapper objects (bwList), we will iterate over the bwList, create a new Bill__c record, and assign the values of the BillWrapper properties to the fields on the Bill__c record.
+    */
+    public class BillWrapper {
+        public String billId;
+        public String accountName;
+        public String balance;
+    }
+
+        }
